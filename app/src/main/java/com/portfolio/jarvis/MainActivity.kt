@@ -38,6 +38,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.Locale
+import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.text.TextStyle
+
 
 enum class JarvisState {
     LOADING,    // Загрузка моделей в ОЗУ
@@ -182,6 +185,16 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
             ),
             label = "pulseScale"
         )
+    // Плавное бесконечное вращение внутренних турбин реактора
+        val rotationAngle by infiniteTransition.animateFloat(
+            initialValue = 0f,
+            targetValue = 360f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(12000, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "rotationAngle"
+        )
 
         Column(
             modifier = Modifier
@@ -310,37 +323,145 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                 ) {
                     Canvas(modifier = Modifier.fillMaxSize()) {
                         val center = Offset(size.width / 2, size.height / 2)
-                        val baseRadius = size.minDimension / 2.5f
+                        val maxR = size.minDimension / 2.15f
 
+                        // 1. Внешнее радиальное свечение вокруг реактора
                         drawCircle(
                             brush = Brush.radialGradient(
-                                colors = listOf(reactorColor.copy(alpha = 0.35f), Color.Transparent),
+                                colors = listOf(reactorColor.copy(alpha = 0.4f), Color.Transparent),
                                 center = center,
-                                radius = baseRadius * pulseScale * 1.25f
+                                radius = maxR * 1.15f
                             ),
-                            radius = baseRadius * pulseScale * 1.25f,
+                            radius = maxR * 1.15f,
                             center = center
                         )
+
+                        // 2. Светящийся энергетический круг под катушками
+                        val glowRingRadius = maxR * 0.80f
                         drawCircle(
-                            color = reactorColor,
-                            radius = baseRadius * pulseScale,
+                            color = reactorColor.copy(alpha = 0.85f),
+                            radius = glowRingRadius,
                             center = center,
-                            style = Stroke(width = 6.dp.toPx(), cap = StrokeCap.Round)
+                            style = Stroke(width = maxR * 0.22f)
                         )
+
+                        // Темный обод по самому краю
                         drawCircle(
-                            color = reactorColor.copy(alpha = 0.8f),
-                            radius = baseRadius * 0.45f,
+                            color = Color(0xFF0A1424),
+                            radius = maxR * 0.92f,
+                            center = center,
+                            style = Stroke(width = 3.dp.toPx())
+                        )
+
+                        // 3. Вращающиеся внутренние концентрические кольца (как на картинке)
+                        rotate(degrees = rotationAngle, pivot = center) {
+                            drawCircle(
+                                color = reactorColor.copy(alpha = 0.5f),
+                                radius = maxR * 0.58f,
+                                center = center,
+                                style = Stroke(width = 2.dp.toPx())
+                            )
+                            drawCircle(
+                                color = Color(0xFF80D8FF).copy(alpha = 0.35f),
+                                radius = maxR * 0.49f,
+                                center = center,
+                                style = Stroke(width = 3.dp.toPx())
+                            )
+                            drawCircle(
+                                color = reactorColor.copy(alpha = 0.6f),
+                                radius = maxR * 0.41f,
+                                center = center,
+                                style = Stroke(width = 1.5.dp.toPx())
+                            )
+                        }
+
+                        // 4. 10 массивных темных магнитных катушек по окружности (как на фото)
+                        val coilCount = 10
+                        for (i in 0 until coilCount) {
+                            val angle = i * (360f / coilCount)
+                            rotate(degrees = angle, pivot = center) {
+                                val coilWidth = maxR * 0.24f
+                                val coilHeight = maxR * 0.31f
+                                val topY = center.y - maxR * 0.98f
+
+                                // Темный металлический корпус катушки
+                                drawRoundRect(
+                                    color = Color(0xFF070D19),
+                                    topLeft = Offset(center.x - coilWidth / 2, topY),
+                                    size = androidx.compose.ui.geometry.Size(coilWidth, coilHeight),
+                                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(4.dp.toPx(), 4.dp.toPx())
+                                )
+                                // Тонкая светящаяся окантовка катушки
+                                drawRoundRect(
+                                    color = reactorColor.copy(alpha = 0.7f),
+                                    topLeft = Offset(center.x - coilWidth / 2, topY),
+                                    size = androidx.compose.ui.geometry.Size(coilWidth, coilHeight),
+                                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(4.dp.toPx(), 4.dp.toPx()),
+                                    style = Stroke(width = 1.5.dp.toPx())
+                                )
+                            }
+                        }
+
+                        // 5. Три массивные опорные перемычки (на 120, 240 и 360 градусов)
+                        for (i in 0 until 3) {
+                            val angle = i * 120f + 60f
+                            rotate(degrees = angle, pivot = center) {
+                                val strutWidth = maxR * 0.14f
+                                val strutHeight = maxR * 0.34f
+                                drawRect(
+                                    color = Color(0xFF070D19),
+                                    topLeft = Offset(center.x - strutWidth / 2, center.y - maxR * 0.68f),
+                                    size = androidx.compose.ui.geometry.Size(strutWidth, strutHeight)
+                                )
+                            }
+                        }
+
+                        // 6. Яркий пульсирующий центральный сердечник с белым ядром
+                        val coreRadius = maxR * 0.33f * pulseScale
+                        drawCircle(
+                            brush = Brush.radialGradient(
+                                colors = listOf(
+                                    Color.White,
+                                    Color(0xFFE0F7FA),
+                                    reactorColor
+                                ),
+                                center = center,
+                                radius = coreRadius
+                            ),
+                            radius = coreRadius,
                             center = center
                         )
                     }
 
-                    Text(
-                        text = if (currentState == JarvisState.LISTENING) "ГОВОРИТЕ" else "ЗАЖАТЬ",
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = 14.sp
-                    )
+
+                    val buttonLabel = if (currentState == JarvisState.LISTENING) "ГОВОРИТЕ" else "ЗАЖАТЬ"
+
+                    Box(contentAlignment = Alignment.Center) {
+                        // Нижний слой: темная объемная окантовка букв
+                        Text(
+                            text = buttonLabel,
+                            style = TextStyle(
+                                color = Color(0xFF060B14),
+                                fontWeight = FontWeight.Black,
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 15.sp,
+                                letterSpacing = 1.5.sp,
+                                drawStyle = Stroke(width = 12f)
+                            )
+                        )
+                        // Верхний слой: яркая белая заливка внутри
+                        Text(
+                            text = buttonLabel,
+                            style = TextStyle(
+                                color = Color.White,
+                                fontWeight = FontWeight.Black,
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 15.sp,
+                                letterSpacing = 1.5.sp
+                            )
+                        )
+                    }
+
                 }
             }
 
