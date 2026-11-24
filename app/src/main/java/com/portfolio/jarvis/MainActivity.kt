@@ -40,7 +40,8 @@ import java.io.File
 import java.util.Locale
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.text.TextStyle
-
+import android.net.Uri
+import android.provider.OpenableColumns
 
 enum class JarvisState {
     LOADING,    // Загрузка моделей в ОЗУ
@@ -62,6 +63,21 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
     private var recognizedQuery by mutableStateOf("")
     private var jarvisResponse by mutableStateOf("")
 
+    private var modelsMissing by mutableStateOf(false)
+
+    // Выбор файла модели слуха (stt_model.bin)
+    private val pickSttLauncher = registerForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        uri?.let { importModelFile(it, "stt_model.bin") }
+    }
+
+    // Выбор файла модели мозга (llm_model.gguf)
+    private val pickLlmLauncher = registerForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        uri?.let { importModelFile(it, "llm_model.gguf") }
+    }
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted ->
@@ -112,11 +128,18 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
 
             if (!whisperExists || !llamaExists) {
                 runOnUiThread {
-                    statusText = "ОШИБКА: ФАЙЛЫ МОДЕЛЕЙ НЕ НАЙДЕНЫ"
-                    jarvisResponse = "Поместите файлы stt_model.bin и llm_model.gguf в папку:\n${baseDir?.absolutePath}"
+                    modelsMissing = true
+                    statusText = "ТРЕБУЕТСЯ УСТАНОВКА МОДЕЛЕЙ"
+                    val missingList = buildString {
+                        if (!whisperExists) append("• Модель слуха (stt_model.bin)\n")
+                        if (!llamaExists) append("• Модель мозга (llm_model.gguf)\n")
+                    }
+                    jarvisResponse = "Не найдены файлы нейросетей:\n$missingList\nВыберите их из папки «Загрузки» кнопками ниже:"
                 }
                 return@Thread
             }
+
+            runOnUiThread { modelsMissing = false }
 
             val success = nativeBridge.initEngines(whisperPath, llamaPath)
             runOnUiThread {
@@ -131,6 +154,39 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         }.start()
     }
 
+    private fun importModelFile(uri: Uri, targetFileName: String) {
+        Thread {
+            runOnUiThread {
+                modelsMissing = false
+                currentState = JarvisState.LOADING
+                statusText = "КОПИРОВАНИЕ $targetFileName..."
+                jarvisResponse = "Пожалуйста, подождите, идет перенос нейросети в рабочую директорию..."
+            }
+            try {
+                val baseDir = getExternalFilesDir(null)
+                val targetFile = File(baseDir, targetFileName)
+
+                contentResolver.openInputStream(uri)?.use { input ->
+                    targetFile.outputStream().use { output ->
+                        input.copyTo(output, bufferSize = 65536) // Быстрое копирование блоками по 64 КБ
+                    }
+                }
+
+                runOnUiThread {
+                    jarvisResponse = "Файл $targetFileName успешно установлен!"
+                }
+                // Сразу проверяем, все ли файлы на месте, и запускаем движок
+                loadModelsAsync()
+            } catch (e: Exception) {
+                e.printStackTrace()
+                runOnUiThread {
+                    modelsMissing = true
+                    statusText = "ОШИБКА КОПИРОВАНИЯ ФАЙЛА"
+                    jarvisResponse = "Не удалось скопировать файл: ${e.message}"
+                }
+            }
+        }.start()
+    }
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) {
             tts?.language = Locale("ru", "RU")
@@ -497,26 +553,49 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                     )
                 }
                 Spacer(modifier = Modifier.height(8.dp))
-                OutlinedButton(
-                    onClick = {
-                        tts?.stop()
-                        nativeBridge.stopGeneration()
-                        recognizedQuery = ""
-                        jarvisResponse = "Очистка памяти диалога..."
-                        currentState = JarvisState.IDLE
-                        statusText = "ГОТОВ К СЛЕДУЮЩЕЙ КОМАНДЕ"
 
-                        coroutineScope.launch(Dispatchers.IO) {
-                            nativeBridge.clearHistory()
-                            withContext(Dispatchers.Main) {
-                                jarvisResponse = "Память диалога очищена, сэр."
-                            }
+                if (modelsMissing) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = { pickSttLauncher.launch(arrayOf("*/*")) },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF00E5FF))
+                        ) {
+                            Text("ИМПОРТ STT (.bin)", fontFamily = FontFamily.Monospace, fontSize = 11.sp)
                         }
-                    },
-                    modifier = Modifier.align(Alignment.End),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF00E5FF))
-                ) {
-                    Text("СБРОС КОНТЕКСТА", fontFamily = FontFamily.Monospace, fontSize = 12.sp)
+                        OutlinedButton(
+                            onClick = { pickLlmLauncher.launch(arrayOf("*/*")) },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFFFB300))
+                        ) {
+                            Text("ИМПОРТ LLM (.gguf)", fontFamily = FontFamily.Monospace, fontSize = 11.sp)
+                        }
+                    }
+                } else {
+                    OutlinedButton(
+                        onClick = {
+                            tts?.stop()
+                            nativeBridge.stopGeneration()
+                            recognizedQuery = ""
+                            jarvisResponse = "Очистка памяти диалога..."
+                            currentState = JarvisState.IDLE
+                            statusText = "ГОТОВ К СЛЕДУЮЩЕЙ КОМАНДЕ"
+
+                            coroutineScope.launch(Dispatchers.IO) {
+                                nativeBridge.clearHistory()
+                                withContext(Dispatchers.Main) {
+                                    jarvisResponse = "Память диалога очищена, сэр."
+                                }
+                            }
+                        },
+                        modifier = Modifier.align(Alignment.End),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF00E5FF))
+                    ) {
+                        Text("СБРОС КОНТЕКСТА", fontFamily = FontFamily.Monospace, fontSize = 12.sp)
+                    }
                 }
             }
         }
