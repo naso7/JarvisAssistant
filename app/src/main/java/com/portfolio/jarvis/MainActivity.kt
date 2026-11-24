@@ -100,9 +100,10 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
     private fun loadModelsAsync() {
         Thread {
             // Папка приложения во внутренней памяти: /sdcard/Android/data/com.portfolio.jarvis/files/
+            // Папка приложения во внутренней памяти: /sdcard/Android/data/com.portfolio.jarvis/files/
             val baseDir = getExternalFilesDir(null)
-            val whisperPath = File(baseDir, "ggml-tiny.bin").absolutePath
-            val llamaPath = File(baseDir, "Qwen2.5-1.5B-Instruct-Q4_K_M.gguf").absolutePath
+            val whisperPath = File(baseDir, "stt_model.bin").absolutePath
+            val llamaPath = File(baseDir, "llm_model.gguf").absolutePath
 
             val whisperExists = File(whisperPath).exists()
             val llamaExists = File(llamaPath).exists()
@@ -110,7 +111,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
             if (!whisperExists || !llamaExists) {
                 runOnUiThread {
                     statusText = "ОШИБКА: ФАЙЛЫ МОДЕЛЕЙ НЕ НАЙДЕНЫ"
-                    jarvisResponse = "Поместите файлы моделей в папку:\n${baseDir?.absolutePath}"
+                    jarvisResponse = "Поместите файлы stt_model.bin и llm_model.gguf в папку:\n${baseDir?.absolutePath}"
                 }
                 return@Thread
             }
