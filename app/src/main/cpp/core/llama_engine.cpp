@@ -55,7 +55,7 @@ std::string LlamaEngine::generateResponse(const std::string& userMessage, TokenC
             "Отвечай в 1 предложение, обращайся 'сэр' и ОБЯЗАТЕЛЬНО ставь тег в конце:\n"
             "- Свет / фонарик: [ACTION:FLASHLIGHT_ON] или [ACTION:FLASHLIGHT_OFF]\n"
             "- Таймер на N минут: [ACTION:TIMER:N]\n"
-            "- Будильник на ЧЧ:ММ: [ACTION:ALARM_TIME:ЧЧ:ММ] или через N минут: [ACTION:ALARM_IN:N]\n"
+            "- Будильник на ЧЧ:ММ: [ACTION:ALARM_TIME:ЧЧ:ММ] или чещрез N минут: [ACTION:ALARM_IN:N]\n"
             "- Открыть / запустить / включить любую программу, игру или музыку (всё кроме фонарика): [ACTION:OPEN_APP:Название]\n\n"
             "Примеры:\n"
             "User: Включи фонарик -> Assistant: Включаю свет, сэр. [ACTION:FLASHLIGHT_ON]\n"
