@@ -99,8 +99,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
 
     private fun loadModelsAsync() {
         Thread {
-            // Папка приложения во внутренней памяти: /sdcard/Android/data/com.portfolio.jarvis/files/
-            // Папка приложения во внутренней памяти: /sdcard/Android/data/com.portfolio.jarvis/files/
+             // Папка приложения во внутренней памяти: /sdcard/Android/data/com.portfolio.jarvis/files/
             val baseDir = getExternalFilesDir(null)
             val whisperPath = File(baseDir, "stt_model.bin").absolutePath
             val llamaPath = File(baseDir, "llm_model.gguf").absolutePath
@@ -189,126 +188,162 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color(0xFF060B14)) // Глубокий темно-синий фон HUD
+                .background(Color(0xFF060B14)) // Сначала заливаем весь экран темным фоном (включая шторку)
+                .systemBarsPadding()           //  отступ от верхнего и нижнего системных баров
                 .padding(20.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceBetween
         ) {
+
             // Верхняя панель статуса
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
                 Text(
-                    text = "J.A.R.V.I.S. // MARK VII",
-                    color = Color(0xFF00E5FF),
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
+                    text = "J.A.R.V.I.S.",
+                    color = Color.White, // Чистый белый цвет для четкого контраста
+                    fontSize = 30.sp,
+                    fontWeight = FontWeight.ExtraBold,
                     fontFamily = FontFamily.Monospace,
-                    letterSpacing = 3.sp
+                    letterSpacing = 6.sp,
+                    textAlign = TextAlign.Center
                 )
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
-                    text = statusText,
-                    color = reactorColor,
-                    fontSize = 12.sp,
+                    text = "ВАШ ИНТЕЛЛЕКТУАЛЬНЫЙ ПОМОЩНИК",
+                    color = Color(0xFFFFB300), // Теплый золотой оттенок брони Mark VII
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
                     fontFamily = FontFamily.Monospace,
+                    letterSpacing = 2.sp,
                     textAlign = TextAlign.Center
                 )
             }
 
             val latestState by rememberUpdatedState(currentState)
 
-            // Центр: Интерактивный Дуговой Реактор (Push-to-Talk)
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier = Modifier
-                    .size(240.dp)
-                    .pointerInput(Unit) {
-                        detectTapGestures(
-                            onPress = {
-                                if (latestState == JarvisState.IDLE || latestState == JarvisState.SPEAKING) {
-                                    tts?.stop()
-                                    nativeBridge.stopGeneration()
-                                    currentState = JarvisState.LISTENING
-                                    statusText = "СЛУШАЮ ВАС, СЭР..."
-                                    recognizedQuery = ""
-                                    jarvisResponse = ""
-                                    audioRecorder.startRecording()
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                // Строка статуса теперь находится прямо над реактором и меняет цвет вместе с ним
+                Text(
+                    text = statusText,
+                    color = reactorColor,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
 
-                                    // Теперь Compose не прервет ожидание при смене цвета реактора
-                                    tryAwaitRelease()
+                // Интерактивный Дуговой Реактор (Push-to-Talk)
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .size(240.dp)
+                        .pointerInput(Unit) {
+                            detectTapGestures(
+                                onPress = {
+                                    if (latestState == JarvisState.IDLE || latestState == JarvisState.SPEAKING) {
+                                        tts?.stop()
+                                        nativeBridge.stopGeneration()
+                                        currentState = JarvisState.LISTENING
+                                        statusText = "СЛУШАЮ ВАС, СЭР..."
+                                        recognizedQuery = ""
+                                        jarvisResponse = ""
+                                        audioRecorder.startRecording()
 
-                                    currentState = JarvisState.THINKING
-                                    statusText = "АНАЛИЗ ГОЛОСОВОГО ВВОДА..."
+                                        // Теперь Compose не прервет ожидание при смене цвета реактора
+                                        tryAwaitRelease()
 
-                                    coroutineScope.launch(Dispatchers.IO) {
-                                        val samples = audioRecorder.stopRecordingAndGetSamples()
-                                        android.util.Log.d("JarvisAudio", "Записано сэмплов: ${samples.size}")
+                                        currentState = JarvisState.THINKING
+                                        statusText = "АНАЛИЗ ГОЛОСОВОГО ВВОДА..."
 
-                                        val text = nativeBridge.transcribeAudio(samples).trim()
-                                        android.util.Log.d("JarvisAudio", "Распознано: $text")
+                                        coroutineScope.launch(Dispatchers.IO) {
+                                            val samples = audioRecorder.stopRecordingAndGetSamples()
+                                            android.util.Log.d(
+                                                "JarvisAudio",
+                                                "Записано сэмплов: ${samples.size}"
+                                            )
 
-                                        withContext(Dispatchers.Main) {
-                                            if (text.isBlank()) {
-                                                currentState = JarvisState.IDLE
-                                                statusText = "РЕЧЬ НЕ РАСПОЗНАНА. ПОПРОБУЙТЕ СНОВА"
-                                                return@withContext
-                                            }
-                                            recognizedQuery = "Вы: $text"
-                                            statusText = "ОБРАБОТКА ЗАПРОСА..."
-                                        }
-
-                                        if (text.isNotBlank()) {
-
-                                            val rawReply = nativeBridge.askJarvis(text)
-                                            android.util.Log.d("JarvisLLM", "Сырой ответ модели: '$rawReply'")
-                                            val cleanReply = actionExecutor.processAndCleanResponse(rawReply)
+                                            val text = nativeBridge.transcribeAudio(samples).trim()
+                                            android.util.Log.d("JarvisAudio", "Распознано: $text")
 
                                             withContext(Dispatchers.Main) {
-                                                jarvisResponse = cleanReply
-                                                speak(cleanReply)
-                                                currentState = JarvisState.IDLE
-                                                statusText = "ГОТОВ К СЛЕДУЮЩЕЙ КОМАНДЕ"
+                                                if (text.isBlank()) {
+                                                    currentState = JarvisState.IDLE
+                                                    statusText =
+                                                        "РЕЧЬ НЕ РАСПОЗНАНА. ПОПРОБУЙТЕ СНОВА"
+                                                    return@withContext
+                                                }
+                                                recognizedQuery = "Вы: $text"
+                                                statusText = "ОБРАБОТКА ЗАПРОСА..."
+                                            }
+
+                                            if (text.isNotBlank()) {
+
+                                                val rawReply = nativeBridge.askJarvis(text)
+                                                android.util.Log.d(
+                                                    "JarvisLLM",
+                                                    "Сырой ответ модели: '$rawReply'"
+                                                )
+                                                val cleanReply =
+                                                    actionExecutor.processAndCleanResponse(rawReply)
+
+                                                withContext(Dispatchers.Main) {
+                                                    jarvisResponse = cleanReply
+                                                    speak(cleanReply)
+                                                    currentState = JarvisState.IDLE
+                                                    statusText = "ГОТОВ К СЛЕДУЮЩЕЙ КОМАНДЕ"
+                                                }
                                             }
                                         }
                                     }
                                 }
-                            }
+                            )
+                        }
+                ) {
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        val center = Offset(size.width / 2, size.height / 2)
+                        val baseRadius = size.minDimension / 2.5f
+// Внешнее свечение
+                        drawCircle(
+                            brush = Brush.radialGradient(
+                                colors = listOf(
+                                    reactorColor.copy(alpha = 0.35f),
+                                    Color.Transparent
+                                ),
+                                center = center,
+                                radius = baseRadius * pulseScale * 1.25f
+                            ),
+                            radius = baseRadius * pulseScale * 1.25f,
+                            center = center
+                        )
+// Внешнее кольцо HUD
+                        drawCircle(
+                            color = reactorColor,
+                            radius = baseRadius * pulseScale,
+                            center = center,
+                            style = Stroke(width = 6.dp.toPx(), cap = StrokeCap.Round)
+                        )
+// Внутренний сердечник
+                        drawCircle(
+                            color = reactorColor.copy(alpha = 0.8f),
+                            radius = baseRadius * 0.45f,
+                            center = center
                         )
                     }
-            ) {
-                Canvas(modifier = Modifier.fillMaxSize()) {
-                    val center = Offset(size.width / 2, size.height / 2)
-                    val baseRadius = size.minDimension / 2.5f
-// Внешнее свечение
-                    drawCircle(
-                        brush = Brush.radialGradient(
-                            colors = listOf(reactorColor.copy(alpha = 0.35f), Color.Transparent),
-                            center = center,
-                            radius = baseRadius * pulseScale * 1.25f
-                        ),
-                        radius = baseRadius * pulseScale * 1.25f,
-                        center = center
-                    )
-// Внешнее кольцо HUD
-                    drawCircle(
-                        color = reactorColor,
-                        radius = baseRadius * pulseScale,
-                        center = center,
-                        style = Stroke(width = 6.dp.toPx(), cap = StrokeCap.Round)
-                    )
-// Внутренний сердечник
-                    drawCircle(
-                        color = reactorColor.copy(alpha = 0.8f),
-                        radius = baseRadius * 0.45f,
-                        center = center
+                    Text(
+                        text = if (currentState == JarvisState.LISTENING) "ГОВОРИТЕ" else "ЗАЖАТЬ",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 14.sp
                     )
                 }
-                Text(
-                    text = if (currentState == JarvisState.LISTENING) "ГОВОРИТЕ" else "ЗАЖАТЬ",
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 14.sp
-                )
             }
 // Нижняя панель: Лог диалога и кнопка сброса памяти
             Column(
