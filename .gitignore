@@ -1,0 +1,15 @@
+*.iml
+.gradle
+/local.properties
+.idea/
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+
+# Тяжелые файлы весов нейросетей (их качают отдельно по инструкции)
+*.gguf
+*.bin
+*.apk
