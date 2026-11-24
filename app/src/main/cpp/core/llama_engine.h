@@ -11,6 +11,7 @@
 #include <vector>
 #include <functional>
 #include <atomic>
+#include <mutex>
 #include "llama.h"
 
 class LlamaEngine {
@@ -21,8 +22,6 @@ public:
     ~LlamaEngine();
 
     bool loadModel(const std::string& modelPath);
-
-    // Генерация ответа с потоковой выдачей букв в callback
     std::string generateResponse(const std::string& userMessage, TokenCallback onToken);
 
     void clearHistory();
@@ -36,9 +35,9 @@ private:
     int global_pos = 0;
     bool isFirstTurn = true;
     std::atomic<bool> stopFlag{false};
+    std::mutex engineMutex; // Защита от одновременного доступа из UI и фонового потока
 
-    void resetContext();
+    void resetContextInternal();
 };
-
 
 #endif //JARVISASSISTANT_LLAMA_ENGINE_H

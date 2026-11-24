@@ -154,32 +154,30 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
     fun JarvisHudScreen() {
         val coroutineScope = rememberCoroutineScope()
         val scrollState = rememberScrollState()
+        val latestState by rememberUpdatedState(currentState)
 
-        // Автопрокрутка текста при генерации
         LaunchedEffect(jarvisResponse) {
             scrollState.animateScrollTo(scrollState.maxValue)
         }
 
-        // Анимация цвета реактора в зависимости от состояния
         val reactorColor by animateColorAsState(
             targetValue = when (currentState) {
                 JarvisState.LOADING -> Color(0xFF555555)
-                JarvisState.IDLE -> Color(0xFF00E5FF)      // Фирменный голубой
-                JarvisState.LISTENING -> Color(0xFFFF1744) // Красный при записи
-                JarvisState.THINKING -> Color(0xFFFFD600)  // Золотой при расчетах
-                JarvisState.SPEAKING -> Color(0xFF00B0FF)  // Яркий синий при ответе
+                JarvisState.IDLE -> Color(0xFF00E5FF)
+                JarvisState.LISTENING -> Color(0xFFFF1744)
+                JarvisState.THINKING -> Color(0xFFFFD600)
+                JarvisState.SPEAKING -> Color(0xFF00B0FF)
             },
-            animationSpec = tween(400),
+            animationSpec = tween(300),
             label = "reactorColor"
         )
 
-        // Бесконечная пульсация колец реактора
         val infiniteTransition = rememberInfiniteTransition(label = "pulse")
         val pulseScale by infiniteTransition.animateFloat(
-            initialValue = 0.92f,
-            targetValue = 1.08f,
+            initialValue = 0.94f,
+            targetValue = 1.06f,
             animationSpec = infiniteRepeatable(
-                animation = tween(if (currentState == JarvisState.THINKING) 400 else 1200, easing = FastOutSlowInEasing),
+                animation = tween(1000, easing = FastOutSlowInEasing),
                 repeatMode = RepeatMode.Reverse
             ),
             label = "pulseScale"
@@ -188,14 +186,12 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color(0xFF060B14)) // Сначала заливаем весь экран темным фоном (включая шторку)
-                .systemBarsPadding()           //  отступ от верхнего и нижнего системных баров
+                .background(Color(0xFF060B14))
+                .systemBarsPadding()
                 .padding(20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.SpaceBetween
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-
-            // Верхняя панель статуса
+            // 1. ВЕРХНИЙ БЛОК: Жестко закрепленная шапка
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -204,7 +200,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
             ) {
                 Text(
                     text = "J.A.R.V.I.S.",
-                    color = Color.White, // Чистый белый цвет для четкого контраста
+                    color = Color.White,
                     fontSize = 30.sp,
                     fontWeight = FontWeight.ExtraBold,
                     fontFamily = FontFamily.Monospace,
@@ -214,7 +210,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
                     text = "ВАШ ИНТЕЛЛЕКТУАЛЬНЫЙ ПОМОЩНИК",
-                    color = Color(0xFFFFB300), // Теплый золотой оттенок брони Mark VII
+                    color = Color(0xFFFFB300),
                     fontSize = 11.sp,
                     fontWeight = FontWeight.SemiBold,
                     fontFamily = FontFamily.Monospace,
@@ -223,27 +219,40 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                 )
             }
 
-            val latestState by rememberUpdatedState(currentState)
-
+            // 2. ЦЕНТРАЛЬНЫЙ БЛОК: Занимает всё свободное пространство (weight = 1f), поэтому центр НИКОГДА не сдвигается
             Column(
-                horizontalAlignment = Alignment.CenterHorizontally
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
             ) {
-                // Строка статуса теперь находится прямо над реактором и меняет цвет вместе с ним
-                Text(
-                    text = statusText,
-                    color = reactorColor,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Monospace,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(bottom = 16.dp)
-                )
+                // Увеличили высоту до 56.dp и добавили Spacer(24.dp), чтобы текст не касался реактора
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp)
+                        .padding(horizontal = 12.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = statusText,
+                        color = reactorColor,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace,
+                        textAlign = TextAlign.Center,
+                        lineHeight = 18.sp,
+                        maxLines = 2
+                    )
+                }
 
-                // Интерактивный Дуговой Реактор (Push-to-Talk)
+                Spacer(modifier = Modifier.height(24.dp))
+
                 Box(
                     contentAlignment = Alignment.Center,
                     modifier = Modifier
-                        .size(240.dp)
+                        .size(210.dp)
                         .pointerInput(Unit) {
                             detectTapGestures(
                                 onPress = {
@@ -256,46 +265,39 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                                         jarvisResponse = ""
                                         audioRecorder.startRecording()
 
-                                        // Теперь Compose не прервет ожидание при смене цвета реактора
                                         tryAwaitRelease()
 
                                         currentState = JarvisState.THINKING
                                         statusText = "АНАЛИЗ ГОЛОСОВОГО ВВОДА..."
 
                                         coroutineScope.launch(Dispatchers.IO) {
-                                            val samples = audioRecorder.stopRecordingAndGetSamples()
-                                            android.util.Log.d(
-                                                "JarvisAudio",
-                                                "Записано сэмплов: ${samples.size}"
-                                            )
-
-                                            val text = nativeBridge.transcribeAudio(samples).trim()
-                                            android.util.Log.d("JarvisAudio", "Распознано: $text")
-
-                                            withContext(Dispatchers.Main) {
-                                                if (text.isBlank()) {
-                                                    currentState = JarvisState.IDLE
-                                                    statusText =
-                                                        "РЕЧЬ НЕ РАСПОЗНАНА. ПОПРОБУЙТЕ СНОВА"
-                                                    return@withContext
-                                                }
-                                                recognizedQuery = "Вы: $text"
-                                                statusText = "ОБРАБОТКА ЗАПРОСА..."
-                                            }
-
-                                            if (text.isNotBlank()) {
-
-                                                val rawReply = nativeBridge.askJarvis(text)
-                                                android.util.Log.d(
-                                                    "JarvisLLM",
-                                                    "Сырой ответ модели: '$rawReply'"
-                                                )
-                                                val cleanReply =
-                                                    actionExecutor.processAndCleanResponse(rawReply)
+                                            try {
+                                                val samples = audioRecorder.stopRecordingAndGetSamples()
+                                                val text = nativeBridge.transcribeAudio(samples).trim()
 
                                                 withContext(Dispatchers.Main) {
-                                                    jarvisResponse = cleanReply
-                                                    speak(cleanReply)
+                                                    if (text.isBlank()) {
+                                                        currentState = JarvisState.IDLE
+                                                        statusText = "РЕЧЬ НЕ РАСПОЗНАНА. ПОПРОБУЙТЕ СНОВА"
+                                                        return@withContext
+                                                    }
+                                                    recognizedQuery = "Вы: $text"
+                                                    statusText = "ОБРАБОТКА ЗАПРОСА..."
+                                                }
+
+                                                if (text.isNotBlank()) {
+                                                    val rawReply = nativeBridge.askJarvis(text)
+                                                    val cleanReply = actionExecutor.processAndCleanResponse(rawReply)
+
+                                                    withContext(Dispatchers.Main) {
+                                                        jarvisResponse = cleanReply.ifBlank { "Не удалось сформировать ответ, сэр." }
+                                                        speak(jarvisResponse)
+                                                    }
+                                                }
+                                            } catch (e: Exception) {
+                                                e.printStackTrace()
+                                            } finally {
+                                                withContext(Dispatchers.Main) {
                                                     currentState = JarvisState.IDLE
                                                     statusText = "ГОТОВ К СЛЕДУЮЩЕЙ КОМАНДЕ"
                                                 }
@@ -309,33 +311,29 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                     Canvas(modifier = Modifier.fillMaxSize()) {
                         val center = Offset(size.width / 2, size.height / 2)
                         val baseRadius = size.minDimension / 2.5f
-// Внешнее свечение
+
                         drawCircle(
                             brush = Brush.radialGradient(
-                                colors = listOf(
-                                    reactorColor.copy(alpha = 0.35f),
-                                    Color.Transparent
-                                ),
+                                colors = listOf(reactorColor.copy(alpha = 0.35f), Color.Transparent),
                                 center = center,
                                 radius = baseRadius * pulseScale * 1.25f
                             ),
                             radius = baseRadius * pulseScale * 1.25f,
                             center = center
                         )
-// Внешнее кольцо HUD
                         drawCircle(
                             color = reactorColor,
                             radius = baseRadius * pulseScale,
                             center = center,
                             style = Stroke(width = 6.dp.toPx(), cap = StrokeCap.Round)
                         )
-// Внутренний сердечник
                         drawCircle(
                             color = reactorColor.copy(alpha = 0.8f),
                             radius = baseRadius * 0.45f,
                             center = center
                         )
                     }
+
                     Text(
                         text = if (currentState == JarvisState.LISTENING) "ГОВОРИТЕ" else "ЗАЖАТЬ",
                         color = Color.White,
@@ -345,28 +343,31 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                     )
                 }
             }
-// Нижняя панель: Лог диалога и кнопка сброса памяти
+
+            // 3. НИЖНИЙ БЛОК: Жестко заданная высота (210.dp), чтобы появление текста не сдвигало реактор вверх
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .height(210.dp)
                     .background(Color(0xFF0D1726), shape = RoundedCornerShape(12.dp))
-                    .padding(16.dp)
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.SpaceBetween
             ) {
-                if (recognizedQuery.isNotEmpty()) {
-                    Text(
-                        text = recognizedQuery,
-                        color = Color(0xFF80D8FF),
-                        fontSize = 14.sp,
-                        fontFamily = FontFamily.Monospace
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                }
-                Box(
+                Column(
                     modifier = Modifier
+                        .weight(1f)
                         .fillMaxWidth()
-                        .height(120.dp)
                         .verticalScroll(scrollState)
                 ) {
+                    if (recognizedQuery.isNotEmpty()) {
+                        Text(
+                            text = recognizedQuery,
+                            color = Color(0xFF80D8FF),
+                            fontSize = 14.sp,
+                            fontFamily = FontFamily.Monospace
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                    }
                     Text(
                         text = jarvisResponse.ifEmpty { "Ожидание голосовых инструкций..." },
                         color = Color.White,
@@ -374,14 +375,22 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                         lineHeight = 20.sp
                     )
                 }
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(8.dp))
                 OutlinedButton(
                     onClick = {
                         tts?.stop()
-                        nativeBridge.clearHistory()
+                        nativeBridge.stopGeneration()
                         recognizedQuery = ""
-                        jarvisResponse = "Память диалога очищена, сэр."
+                        jarvisResponse = "Очистка памяти диалога..."
                         currentState = JarvisState.IDLE
+                        statusText = "ГОТОВ К СЛЕДУЮЩЕЙ КОМАНДЕ"
+
+                        coroutineScope.launch(Dispatchers.IO) {
+                            nativeBridge.clearHistory()
+                            withContext(Dispatchers.Main) {
+                                jarvisResponse = "Память диалога очищена, сэр."
+                            }
+                        }
                     },
                     modifier = Modifier.align(Alignment.End),
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF00E5FF))
@@ -391,4 +400,4 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
             }
         }
     }
-}
+                }
